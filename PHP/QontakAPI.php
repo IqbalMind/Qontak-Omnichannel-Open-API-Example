@@ -70,52 +70,61 @@ class QontakAPI
      * @param string|null $mediaUrl Optional URL for the media attachment
      * @return string JSON response or error message
      */
-    public function broadcastCustomMessage($toName, $toNumber, $templateId, $channelId, $languageCode, $parameters, $mediaType = null, $mediaUrl = null)
-    {
+    public function broadcastCustomMessage($toName, $toNumber, $messageTemplateId, $channelIntegrationId, $languageCode, $parameters = [], $mediaUrl = null, $mediaType = null, $filename = null) {
         $endpoint = '/broadcasts/whatsapp/direct';
-        
-        // Construct message data
+
         $data = [
-            'to_name' => $toName,
-            'to_number' => $toNumber,
-            'message_template_id' => $templateId,
-            'channel_integration_id' => $channelId,
-            'language' => [
-                'code' => $languageCode
+            "to_name" => $toName,
+            "to_number" => $toNumber,
+            "message_template_id" => $messageTemplateId,
+            "channel_integration_id" => $channelIntegrationId,
+            "language" => [
+                "code" => $languageCode
             ],
-            'parameters' => [
-                'body' => $this->formatBodyParameters($parameters['body']),
-                'buttons' => $parameters['buttons'] ?? []
+            "parameters" => [
+                "body" => $parameters
             ]
         ];
 
-        // Add media parameters if applicable
-        if ($mediaType && $mediaUrl) {
-            $data['parameters']['header'] = [
-                'format' => $mediaType,
-                'params' => [
-                    ['key' => 'url', 'value' => $mediaUrl]
+        // Add media header if media information is provided
+        if ($mediaUrl && $mediaType && $filename) {
+            $data["parameters"]["header"] = [
+                "format" => strtoupper($mediaType),
+                "params" => [
+                    ["key" => "url", "value" => $mediaUrl],
+                    ["key" => "filename", "value" => $filename]
                 ]
             ];
         }
 
-        return $this->sendRequest('POST', $endpoint, $data);
-    }
+        // Debugging: Output the constructed data
+        // echo "<pre>";
+        // print_r($data);
+        // echo "</pre>";
 
-    /**
-     * Helper function to format body parameters for message template.
-     */
-    private function formatBodyParameters($bodyParams)
-    {
-        $formattedParams = [];
-        foreach ($bodyParams as $key => $value) {
-            $formattedParams[] = [
-                'key' => (string) $key,
-                'value' => $value['value'],
-                'value_text' => $value['value_text']
-            ];
+        $headers = [
+            "Authorization: Bearer {$this->accessToken}",
+            "Content-Type: application/json"
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->baseUrl . $endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_UNESCAPED_SLASHES));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+
+        if (curl_errno($ch)) {
+            echo 'Error:' . curl_error($ch);
+        } else {
+            // Debugging the response
+            echo 'Response: ' . $result;
         }
-        return $formattedParams;
+        curl_close($ch);
+
+        return $result;
     }
 
     /**
@@ -124,10 +133,35 @@ class QontakAPI
      * @param string $broadcastId The ID of the broadcast
      * @return string JSON response or error message
      */
-    public function getBroadcastStatusLog($broadcastId)
-    {
-        $endpoint = "/broadcasts/{$broadcastId}/whatsapp/log";
-        return $this->sendRequest('GET', $endpoint);
+    // New function to retrieve broadcast log
+    public function getBroadcastLog($broadcastId) {
+        $url = "https://service-chat.qontak.com/api/open/v1/broadcasts/{$broadcastId}/whatsapp/log";
+    
+        $headers = [
+            "Authorization: Bearer {$this->accessToken}",
+            "Content-Type: application/json"
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $result = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if (curl_errno($ch)) {
+            echo 'CURL Error: ' . curl_error($ch);
+        } elseif ($httpCode != 200) {
+            echo "HTTP Error Code: $httpCode<br>";
+            echo "Response: " . $result;
+        } else {
+            echo 'Broadcast Log Response: ' . $result;
+        }
+        
+        curl_close($ch);
+
+        return $result;
     }
 
     /**
